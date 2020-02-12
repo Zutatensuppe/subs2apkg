@@ -98,7 +98,7 @@ def create_audio(video_path, audio_path, line, offset):
 
 
 def create_image(
-    video_path, image_path, line, offset, cutbottom, cuttop, cutleft, cutright
+    video_path, image_path, line, offset, crop
 ):
     if not image_path.exists():
         cmd = [
@@ -111,11 +111,11 @@ def create_image(
             "-vframes",
             "1",
         ]
-        if cutbottom or cuttop or cutleft or cutright:
+        if crop:
             cmd.extend(
                 [
                     "-filter:v",
-                    f"crop=in_w-{cutright + cutleft}:in_h-{cuttop + cutbottom}:{cutleft}:{cuttop}",
+                    f"crop=in_w-{crop[1] + crop[3]}:in_h-{crop[0] + crop[2]}:{crop[3]}:{crop[0]}",
                 ]
             )
         cmd.append(str(image_path))
@@ -125,29 +125,33 @@ def create_image(
 
 
 def create_notes(
-    subs, video_path: Path, tmp_path: Path, offset, cutbottom, cuttop, cutleft, cutright
+    subs, video_path: Path, tmp_path: Path, styles, offset, crop
 ):
     media_files = []
     notes = []
 
     # combine lines that have same start/end
-    subs_2 = []
+    subs2 = []
     last = None
     for line in subs:
+        # skip lines where style is not the correct one
+        if styles and line.style not in styles:
+            continue
         if not last or last.start != line.start or last.end != line.end:
-            subs_2.append(line)
+            subs2.append(line)
         else:
-            last.text = f"{last.text} {line.text}"
+            subs2[len(subs2)-1].text += f" {line.text}"
         last = line
+    subs = subs2
 
-    for idx, line in enumerate(subs_2, start=1):
+    for idx, line in enumerate(subs, start=1):
         print(f"{line!r}")
         audio_path = Path(f"{tmp_path}/{idx}.mp3")
         image_path = Path(f"{tmp_path}/{idx}.jpg")
 
         audio_file = create_audio(video_path, audio_path, line, offset)
         image_file = create_image(
-            video_path, image_path, line, offset, cutbottom, cuttop, cutleft, cutright
+            video_path, image_path, line, offset, crop
         )
         if not audio_file.exists() or not image_file.exists():
             print("skipped")
@@ -173,13 +177,11 @@ def create_notes(
 def main(args):
     video = args.video
     sub = args.sub
+    styles = args.styles
     apkg = args.apkg
     name = args.name
     offset = args.offset
-    cutbottom = args.cutbottom
-    cuttop = args.cuttop
-    cutleft = args.cutleft
-    cutright = args.cutright
+    crop = args.crop
 
     video_path = Path(video)
     subs_path = Path(sub or video_path.with_suffix(".ass"))
@@ -192,7 +194,7 @@ def main(args):
 
     subs = pysubs2.load(subs_path)
     notes, media_files = create_notes(
-        subs, video_path, tmp_path, offset, cutbottom, cuttop, cutleft, cutright
+        subs, video_path, tmp_path, styles, offset, crop
     )
 
     deck = genanki.Deck(deck_id=random.randrange(1 << 30, 1 << 31), name=name)
@@ -210,6 +212,7 @@ if __name__ == "__main__":
     parser.add_argument("-s", "--subs", dest="sub", help="Subtitle file")
     parser.add_argument("-o", "--out", dest="apkg", help="Output anki deck file")
     parser.add_argument("-n", "--name", dest="name", help="Name of anki deck")
+    parser.add_argument("--styles", dest="styles", nargs="*", help="Styles of relevant subtitles in ass files", )
     parser.add_argument(
         "--offset",
         dest="offset",
@@ -218,32 +221,11 @@ if __name__ == "__main__":
         help="Subtitle time offset in ms",
     )
     parser.add_argument(
-        "--cutbottom",
-        dest="cutbottom",
+        "--crop",
+        dest="crop",
+        nargs=4,
         type=int,
-        default=0,
-        help="Cut bottom pixels from created images",
-    )
-    parser.add_argument(
-        "--cuttop",
-        dest="cuttop",
-        type=int,
-        default=0,
-        help="Cut top pixels from created images",
-    )
-    parser.add_argument(
-        "--cutleft",
-        dest="cutleft",
-        type=int,
-        default=0,
-        help="Cut left pixels from created images",
-    )
-    parser.add_argument(
-        "--cutright",
-        dest="cutright",
-        type=int,
-        default=0,
-        help="Cut right pixels from created images",
+        help="Crop pixels from the images (top right bottom left)",
     )
     args = parser.parse_args()
     main(args)
