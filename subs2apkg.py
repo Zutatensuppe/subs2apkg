@@ -92,7 +92,7 @@ def create_audio(video_path, audio_path, line, offset):
             "mp3",
             str(audio_path),
         ]
-        print(" ".join(cmd))
+        # print(" ".join(cmd))
         subprocess.run(cmd, capture_output=True)
     return audio_path
 
@@ -115,7 +115,7 @@ def create_image(
             cmd.extend(
                 [
                     "-filter:v",
-                    f"crop=in_w-{cutright}-{cutleft}:in_h-{cuttop}-{cutbottom}:{cutleft}:{cuttop}",
+                    f"crop=in_w-{cutright + cutleft}:in_h-{cuttop + cutbottom}:{cutleft}:{cuttop}",
                 ]
             )
         cmd.append(str(image_path))
